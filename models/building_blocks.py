@@ -12,13 +12,7 @@ from affinity.affinity_utils3d import hard_affinity_threshold
 
 from affinity.affinity_head_3d import AffinityHead3D
 
-# Encoder,Decoder, UAFS, MAFS block, 
-
-### ENCODER ####
-
-
-
-
+# UAFS, MAFS block, 
 
 
     ### Always both streams will stay symmetric, Also I will  upsample symettrically to the encoders, so inchannels will be equal to the number of channels from encoder 
@@ -146,7 +140,7 @@ class UAFS(nn.Module):
 
             fuse_s = self.res_s(t_cls)
             
-            x_s.add_(fuse_s)
+            x_s = x_s + (fuse_s)
 
             return x_s,x_t
 
@@ -233,5 +227,5 @@ class MAFS(nn.Module):
         fused_s = self.mssf(x_s, hard_affs)
 
 
-        return self.output(x_s.add_(fused_s)), aff_soft
+        return self.output(x_s + fused_s), aff_soft
 
