@@ -11,7 +11,6 @@ class AffinityHead3D(nn.Module):
     Affinity prediction head for 3D AFN-style models.
 
     Supports:
-        - Single-scale affinity (UAFS equivalent): 26 directions
         - Multi-scale affinity (MAFS equivalent): 26 * num_scales directions
 
     This module ONLY predicts affinities.

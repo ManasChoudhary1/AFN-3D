@@ -54,17 +54,16 @@ class ConvEncoder3D(EncoderBase):
             Conv3D --> BatchNorm --> ReLU            
             """
             return nn.Sequential(
-                nn.Conv3d(
-                    in_channels,
-                    out_channels,
-                    kernel_size = 3,
-                    stride = stride,
-                    padding = 1,
-                    bias = False,
-                ),
-                nn.BatchNorm3d(out_channels),
-                nn.ReLU(inplace = True)
-            )
+            # Layer 1: Downsample (or keep size)
+            nn.Conv3d(in_channels, out_channels, 3, stride=stride, padding=1, bias=False),
+            nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=True),
+            
+            # Layer 2: Refine features (Keep size constant)
+            nn.Conv3d(out_channels, out_channels, 3, stride=1, padding=1, bias=False),
+            nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=True)
+        )
     def forward(self, x: torch.Tensor)-> Dict[str,torch.Tensor]:
             """
             Args : 

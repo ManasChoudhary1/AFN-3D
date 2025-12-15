@@ -5,9 +5,6 @@ import torch.nn.functional as F
 from typing import Dict, List, Optional
 
 # Make sure you have monai installed: pip install monai
-from monai.networks.nets import SegResNet
-
-from encoders.base import EncoderBase
 
 from affinity.self_fusegt3d import SelfFuseGT3D,MultiScaleSelfFuse3D
 
@@ -19,66 +16,7 @@ from affinity.affinity_head_3d import AffinityHead3D
 
 ### ENCODER ####
 
-class MonaiSegResNetEncoder(EncoderBase):
-    """
-    Wraps MONAI's SegResNet to function as a pure encoder.
-    
-    Why SegResNet?
-    - Uses GroupNorm by default (better for small batch sizes in 3D).
-    - Highly optimized for GPU memory.
-    - Native .encode() method returns hierarchical features.
-    """
-    def __init__(
-        self, 
-        in_channels: int = 1, 
-        feature_channels: List[int] = [16, 32, 64, 128], 
-        spatial_dims: int = 3
-    ):
-        # SegResNet expects an `init_filters` arg (the first stage width)
-        # and `dropout_prob` etc.
-        # We assume feature_channels follows a doubling pattern like [16, 32, 64, 128]
-        
-        super().__init__(in_channels, feature_channels)
-        
-        self.net = SegResNet(
-            spatial_dims=spatial_dims,
-            init_filters=feature_channels[0], # e.g. 16
-            in_channels=in_channels,
-            out_channels=1, # Dummy value, we won't use the decoder
-            dropout_prob=0.2,
-            # blocks_down defines how many ResNet blocks per stage. 
-            # [1, 2, 2, 4] is a common default configuration.
-            blocks_down=[1, 2, 2, 4], 
-        )
 
-    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """
-        SegResNet.encode(x) returns:
-          - x_final (Tensor): The bottleneck feature (lowest resolution)
-          - down_x (List[Tensor]): A list of intermediate features (high to low res)
-                                   BUT usually in reverse order of generation? 
-                                   Let's verify the standard behavior.
-        """
-        # MONAI SegResNet encode returns:
-        # x (bottleneck), layers (list of skip connections)
-        bottleneck, skips = self.net.encode(x)
-        
-        # skips contains features from [Resolution 1, Resolution 1/2, Resolution 1/4 ...]
-        # bottleneck is Resolution 1/8 (if 4 stages)
-        
-        features = {}
-        
-        # 1. Add the high-res stages from the skip connections
-        # Note: skips[0] is usually the input convolution output (Resolution 1)
-        for i, skip in enumerate(skips):
-            features[f"stage{i+1}"] = skip
-            
-        # 2. Add the bottleneck as the final stage
-        final_stage_idx = len(skips) + 1
-        features[f"stage{final_stage_idx}"] = bottleneck
-        
-        return features
-    
 
 
 
@@ -181,7 +119,7 @@ class UAFS(nn.Module):
                 x_t --> affinity branch input
                 rf --> skipped connection input
             """
-
+            # print(x_s.shape)
             sc = self.sc
             x_s = self.up_s(x_s)
             x_t = self.up_t(x_t)
@@ -190,8 +128,9 @@ class UAFS(nn.Module):
 
             assert rf.shape[2:]==x_s.shape[2:],\
                   "Residual shape is not same as x_s"
+            if rf is not None: 
+                x_s = torch.cat((x_s,rf),dim = 1)
 
-            x_s = torch.cat((x_s,rf),dim = 1)
             x_s = self.decoder_s(x_s)
 
             x_t = torch.cat([x_t, self.s_to_t(x_s) ],dim = 1)

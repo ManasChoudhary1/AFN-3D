@@ -64,8 +64,7 @@ class SelfFuseGT3D(nn.Module):
                     aff = affinity[:, idx : idx + 1]
 
                     # context += neigh * aff   (NO TEMP TENSORS)
-                    torch.addcmul_(context, neigh, aff)
-
+                    context += neigh *aff
                     idx += 1
 
         return context
