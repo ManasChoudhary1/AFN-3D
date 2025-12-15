@@ -1,12 +1,10 @@
 import torch
-from torch.nn import nn
+import torch.nn as nn
 import torch.nn.functional as F
 
 from typing import Optional, Tuple, Callable, List
 
 from .affinity_utils3d import get_groupfeature_3d
-## This module not only extrapolates the 2d logic of AFN to 3d, 
-## but also in a robust manner so as to not get into OOM errors
 
 
 ## REMEMBER THIS CLASS DOES NOT RETURN UPDATED FEATURES BUT THE CONTEXT ( UPDATED FESTURES - X)
@@ -75,75 +73,42 @@ class SelfFuseGT3D(nn.Module):
 
 
 
-## THIS RETURN THE UPDATED FEATURE
+## THIS RETURN THE UPDATED FEATURE, ALSO I DONT USE WEIGHTS DEPENDENT ON FEATURES, SIMPLY BECAUSE I DON"T FEEL THE TASK I AM MAKING THIS FOR REQUIRES IT
 class MultiScaleSelfFuse3D(nn.Module):
-    """
-    Memory-optimal multi-scale affinity fusion (3D).
-
-    - Zero-copy neighborhood access
-    - In-place arithmetic
-    - No redundant module instances
-    """
-
-    def __init__(
-        self,
-        num_scales: int,
-        learnable_weights: bool = False,
-    ):
+    def __init__(self, scales: List[int], learnable_weights: bool = False):
         super().__init__()
-
-        assert num_scales >= 1
-        self.num_scales = num_scales
-
-        # Single instance is sufficient (stateless)
+        self.scales = scales
+        self.num_scales = len(scales)
 
         if learnable_weights:
-            self.scale_weights = nn.Parameter(torch.zeros(num_scales))
+            self.scale_weights = nn.Parameter(torch.zeros(self.num_scales))
         else:
-            self.register_buffer("scale_weights", torch.zeros(num_scales))
+            self.register_buffer("scale_weights", torch.zeros(self.num_scales))
+
+        self.fusers = nn.ModuleList(
+            [SelfFuseGT3D(size=s) for s in scales]
+        )
 
     def forward(
         self,
         x: torch.Tensor,
-        affinity_heads,
-        sizes,
+        hard_affinities: List[torch.Tensor],  # ⬅️ IMPORTANT
     ) -> torch.Tensor:
         """
         Args:
-            x: Tensor[B, C, D, H, W]
-            affinity_heads: list of callables (x -> [B,26,D,H,W])
-            sizes: list of neighborhood radii (len = num_scales)
+            x: [B, C, D, H, W]
+            hard_affinities: list of [B, 26, D, H, W] (binary)
 
         Returns:
-            fused feature: Tensor[B, C, D, H, W]
+            fused feature: [B, C, D, H, W]
         """
         weights = torch.softmax(self.scale_weights, dim=0)
         fused = x
+        # X is consumed here, assuming no further use of this x
 
-        for k in range(self.num_scales):
-            s = sizes[k]
-
-            # Pad once per scale
-            padded_x = F.pad(
-                x,
-                (s, s, s, s, s, s),
-                mode="constant",
-                value=0,
-            )
-
-            affinity = affinity_heads[k](x)
-
-            # Compute context
-            context = SelfFuseGT3D(s)(
-                padded_x,
-                affinity
-            )
-
-            # In-place scale and accumulate
-            context.mul_(weights[k])
-            fused.add_(context)
-
-            # Explicit deletion to save memory
-            del padded_x, affinity, context
+        for k, (s, aff) in enumerate(zip(self.scales, hard_affinities)):
+            padded_x = F.pad(x, (s, s, s, s, s, s))
+            context = self.fusers[k](padded_x, aff)
+            fused.add_(weights[k] * context)
 
         return fused
