@@ -59,12 +59,12 @@ class SelfFuseGT3D(nn.Module):
                         s + dz : s + dz + D,
                         s + dy : s + dy + H,
                         s + dx : s + dx + W,
-                    ]
+                    ].clone()
 
                     aff = affinity[:, idx : idx + 1]
 
                     # context += neigh * aff   (NO TEMP TENSORS)
-                    context += neigh *aff
+                    context = context +  neigh *aff
                     idx += 1
 
         return context
@@ -102,12 +102,12 @@ class MultiScaleSelfFuse3D(nn.Module):
             fused feature: [B, C, D, H, W]
         """
         weights = torch.softmax(self.scale_weights, dim=0)
-        fused = x
+        fused = x.clone()
         # X is consumed here, assuming no further use of this x
 
         for k, (s, aff) in enumerate(zip(self.scales, hard_affinities)):
             padded_x = F.pad(x, (s, s, s, s, s, s))
             context = self.fusers[k](padded_x, aff)
-            fused.add_(weights[k] * context)
+            fused = fused + (weights[k] * context)
 
         return fused

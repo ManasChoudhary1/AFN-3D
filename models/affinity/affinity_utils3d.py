@@ -35,7 +35,7 @@ def get_groupfeature_3d(
                 y_slice = slice(s + dy, -s + dy if -s + dy != 0 else None)
                 x_slice = slice(s + dx, -s + dx if -s + dx != 0 else None)
 
-                neigh = feature[:, :, z_slice, y_slice, x_slice]
+                neigh = feature[:, :, z_slice, y_slice, x_slice].clone()
                 neighbors.append(neigh)
 
     assert len(neighbors) == 26, f"Expected 26 neighbors, got {len(neighbors)}"
