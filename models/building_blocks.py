@@ -254,7 +254,7 @@ class MAFS(nn.Module):
 
         # Multi-scale fusion
         self.mssf = MultiScaleSelfFuse3D(
-            num_scales=self.num_scales,
+            scales=self.scales,
             learnable_weights=True,
         )
 
